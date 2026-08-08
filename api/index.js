@@ -18,15 +18,14 @@ module.exports = async (req, res) => {
         const db = await connectToDatabase();
         const keysCollection = db.collection('keys');
 
-        const rawUrl = req.url || '';
-        const pathOnly = rawUrl.split('?')[0];
+        const urlObj = new URL(req.url, `https://${req.headers.host}`);
+        const pathname = urlObj.pathname;
+        const query = urlObj.searchParams;
 
-        // 1. API Endpoint for Key Validation
-        if (pathOnly === '/api' || pathOnly === '/api/') {
-            const queryParams = new URL(rawUrl, 'http://localhost').searchParams;
-            if (queryParams.has('key')) {
-                const userKey = queryParams.get('key');
-                const deviceId = queryParams.get('device') || 'UNKNOWN';
+        if (pathname === '/api' || pathname === '/api/') {
+            if (query.has('key')) {
+                const userKey = query.get('key');
+                const deviceId = query.get('device') || 'UNKNOWN';
                 const keyDoc = await keysCollection.findOne({ key: userKey });
                 
                 if (!keyDoc) return res.json({ status: false, message: "Invalid Key!" });
@@ -40,25 +39,24 @@ module.exports = async (req, res) => {
                 }
                 return res.json({ status: true, message: "Success!", expiresAt: keyDoc.expiresAt });
             }
+            return res.json({ status: false, message: "No key provided" });
         }
 
-        // 2. Admin Panel Endpoint
-        if (pathOnly === '/api/admin' || pathOnly === '/api/admin/') {
-            const queryParams = new URL(rawUrl, 'http://localhost').searchParams;
-            const pass = queryParams.get('pass');
+        if (pathname === '/api/admin' || pathname === '/api/admin/') {
+            const pass = query.get('pass');
 
             if (pass !== ADMIN_PASSWORD) {
                 res.setHeader('Content-Type', 'text/html');
                 return res.status(200).send(`
                     <!DOCTYPE html>
                     <html>
-                    <head><title>Login</title><meta name="viewport" content="width=device-width, initial-scale=1"></head>
-                    <body style="background:#07090e; color:#00ffcc; font-family:monospace; display:flex; justify-content:center; align-items:center; height:100vh; margin:0;">
-                        <div style="background:#121826; padding:30px; border:1px solid #222f49; border-radius:10px; text-align:center; width:280px;">
-                            <h2>🔐 SECURE LOGIN</h2>
+                    <head><title>Login - Reseller Panel</title><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+                    <body style="background:#0b0914; color:#00ffcc; font-family:sans-serif; display:flex; justify-content:center; align-items:center; height:100vh; margin:0;">
+                        <div style="background:#131022; padding:30px; border:1px solid #2a224a; border-radius:12px; text-align:center; width:300px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);">
+                            <h2 style="color:#b19cd9; margin-bottom:20px; font-size:18px;">🔐 RESELLER LOGIN</h2>
                             <form method="GET" action="/api/admin">
-                                <input type="password" name="pass" placeholder="Password" required autofocus style="padding:12px; width:90%; background:#07090e; color:#fff; border:1px solid #222f49; border-radius:5px; text-align:center; font-size:16px;"><br><br>
-                                <button type="submit" style="padding:12px; width:100%; background:#00ffcc; color:#07090e; border:none; font-weight:bold; border-radius:5px; cursor:pointer; font-size:16px;">ENTER</button>
+                                <input type="password" name="pass" placeholder="Enter Password" required autofocus style="padding:12px; width:90%; background:#0b0914; color:#fff; border:1px solid #3b2f63; border-radius:8px; text-align:center; font-size:15px; outline:none;"><br><br>
+                                <button type="submit" style="padding:12px; width:100%; background:linear-gradient(90deg, #00ffcc, #00bfff); color:#0b0914; border:none; font-weight:bold; border-radius:8px; cursor:pointer; font-size:15px;">LOGIN</button>
                             </form>
                         </div>
                     </body>
@@ -66,14 +64,14 @@ module.exports = async (req, res) => {
                 `);
             }
 
-            const action = queryParams.get('action');
+            const action = query.get('action');
             if (action === 'generate') {
-                const type = queryParams.get('type') || 'Normal';
-                const days = parseInt(queryParams.get('days')) || 1;
-                const label = queryParams.get('label') || 'User';
+                const type = query.get('type') || 'Normal Key';
+                const days = parseInt(query.get('days')) || 1;
+                const label = query.get('label') || 'Customer';
                 
                 const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-                let newKey = type === 'Advance' ? 'ADV-' : 'VIP-';
+                let newKey = type.includes('Advance') ? 'ADV-' : 'VIP-';
                 for (let i = 0; i < 10; i++) newKey += chars.charAt(Math.floor(Math.random() * chars.length));
                 
                 await keysCollection.insertOne({
@@ -89,17 +87,16 @@ module.exports = async (req, res) => {
                 res.writeHead(302, { Location: `/api/admin?pass=${ADMIN_PASSWORD}` });
                 return res.end();
             }
-
             if (action === 'toggle') {
-                const k = queryParams.get('key');
-                const st = queryParams.get('status');
+                const k = query.get('key');
+                const st = query.get('status');
                 await keysCollection.updateOne({ key: k }, { $set: { status: st === 'OFF' ? 'UNUSED' : 'OFF' } });
                 res.writeHead(302, { Location: `/api/admin?pass=${ADMIN_PASSWORD}` });
                 return res.end();
             }
 
             if (action === 'delete') {
-                await keysCollection.deleteOne({ key: queryParams.get('key') });
+                await keysCollection.deleteOne({ key: query.get('key') });
                 res.writeHead(302, { Location: `/api/admin?pass=${ADMIN_PASSWORD}` });
                 return res.end();
             }
@@ -110,41 +107,80 @@ module.exports = async (req, res) => {
             return res.status(200).send(`
                 <!DOCTYPE html>
                 <html>
-                <head><title>Panel</title><meta name="viewport" content="width=device-width, initial-scale=1"></head>
-                <body style="background:#07090e; color:#eee; font-family:monospace; padding:10px; margin:0;">
-                    <div style="max-width:500px; margin:auto;">
-                        <h2 style="color:#b19cd9; text-align:center;">⚡ RESELLER PANEL ⚡</h2>
-                        <div style="background:#121826; padding:15px; border-radius:8px; border:1px solid #222f49; margin-bottom:15px;">
+                <head>
+                    <title>Reseller Panel</title>
+                    <meta name="viewport" content="width=device-width, initial-scale=1">
+                    <style>
+                        body { background: #0b0914; color: #fff; font-family: sans-serif; margin: 0; padding: 15px; }
+                        .container { max-width: 450px; margin: auto; }
+                        .header { font-size: 13px; color: #a29bfe; font-weight: bold; letter-spacing: 1px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+                        .credits-box { background: #131022; border: 1px solid #2a224a; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 20px; }
+                        .credits-num { font-size: 32px; font-weight: bold; color: #b19cd9; margin: 5px 0; }
+                        .tabs { display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 1px solid #2a224a; padding-bottom: 10px; }
+                        .tab { background: none; border: none; color: #888; font-size: 14px; font-weight: bold; cursor: pointer; padding: 5px 10px; }
+                        .tab.active { color: #00ffcc; border-bottom: 2px solid #00ffcc; }
+                        .card { background: #131022; border: 1px solid #2a224a; border-radius: 12px; padding: 15px; margin-bottom: 15px; }
+                        label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 5px; }
+                        select, input { width: 100%; padding: 12px; background: #0b0914; color: #fff; border: 1px solid #2a224a; border-radius: 8px; margin-bottom: 15px; box-sizing: border-box; font-size: 14px; outline: none; }
+                        .btn-generate { width: 100%; padding: 14px; background: #00ffcc; color: #0b0914; border: none; font-weight: bold; border-radius: 8px; cursor: pointer; font-size: 15px; text-transform: uppercase; }
+                        .key-item { background: #0b0914; border: 1px solid #221a38; border-radius: 8px; padding: 12px; margin-bottom: 10px; font-size: 12px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <span>🟢 RABI X PRIME – RESELLER</span>
+                            <span style="color: #00ffcc;">${allKeys.length} KEYS</span>
+                        </div>
+
+                        <div class="credits-box">
+                            <div style="font-size: 11px; color: #888; text-transform: uppercase;">Total Keys Generated</div>
+                            <div class="credits-num">${allKeys.length}</div>
+                            <div style="font-size: 11px; color: #555;">1 key = 1 generation</div>
+                        </div>
+
+                        <div class="tabs">
+                            <button class="tab active">Generate</button>
+                            <button class="tab">My Keys (${allKeys.length})</button>
+                        </div>
+
+                        <div class="card">
                             <form method="GET" action="/api/admin">
                                 <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
                                 <input type="hidden" name="action" value="generate">
-                                <label style="color:#00ffcc; font-size:12px;">TYPE</label>
-                                <select name="type" style="width:100%; padding:8px; margin:5px 0 10px; background:#07090e; color:#fff; border:1px solid #222f49;">
-                                    <option value="Normal">Normal Key</option>
-                                    <option value="Advance">Advance Key</option>
+                                
+                                <label>Key Type</label>
+                                <select name="type">
+                                    <option value="Normal Key">Normal Key</option>
+                                    <option value="Advance Key">Advance Key</option>
                                 </select>
-                                <label style="color:#00ffcc; font-size:12px;">DURATION</label>
-                                <select name="days" style="width:100%; padding:8px; margin:5px 0 10px; background:#07090e; color:#fff; border:1px solid #222f49;">
+
+                                <label>Duration (Days)</label>
+                                <select name="days">
                                     <option value="1">1 Day</option>
                                     <option value="7">7 Days</option>
                                     <option value="30">30 Days</option>
-                                    <option value="365">Lifetime</option>
+                                    <option value="365">Lifetime (365 Days)</option>
                                 </select>
-                                <label style="color:#00ffcc; font-size:12px;">LABEL</label>
-                                <input type="text" name="label" placeholder="Name" style="width:100%; padding:8px; margin:5px 0 10px; background:#07090e; color:#fff; border:1px solid #222f49; box-sizing:border-box;">
-                                <button type="submit" style="width:100%; padding:10px; background:#00ffcc; color:#07090e; border:none; font-weight:bold; border-radius:5px; cursor:pointer;">GENERATE KEY</button>
+
+                                <label>Label (optional)</label>
+                                <input type="text" name="label" placeholder="e.g. Customer Name">
+
+                                <button type="submit" class="btn-generate">⚡ Generate Key</button>
                             </form>
                         </div>
-                        <div style="background:#121826; padding:15px; border-radius:8px; border:1px solid #222f49;">
-                            <h3 style="margin-top:0; color:#b19cd9; font-size:14px;">KEYS (${allKeys.length})</h3>
+
+                        <div class="card">
+                            <h3 style="margin-top:0; font-size:14px; color:#b19cd9;">MANAGED KEYS</h3>
+                            ${allKeys.length === 0 ? '<div style="color:#666; text-align:center; padding:10px;">No keys generated yet.</div>' : ''}
                             ${allKeys.map(k => `
-                                <div style="background:#0b0f19; padding:10px; border-radius:5px; margin-bottom:8px; border:1px solid #1a233a; font-size:11px;">
-                                    <div style="color:#00ffcc; font-weight:bold;">${k.key} [${k.status}]</div>
-                                    <div style="color:#aaa; margin:3px 0;">Label: ${k.label} | Type: ${k.type}</div>
-                                    <div style="color:#777;">Device: ${k.deviceId || 'None'}</div>
-                                    <div style="margin-top:8px;">
-                                        <a href="/api/admin?pass=${ADMIN_PASSWORD}&action=toggle&key=${k.key}&status=${k.status}" style="background:#ffaa00; color:#000; padding:3px 6px; text-decoration:none; border-radius:3px; font-weight:bold; margin-right:5px;">${k.status === 'OFF' ? 'ON' : 'OFF'}</a>
-                                        <a href="/api/admin?pass=${ADMIN_PASSWORD}&action=delete&key=${k.key}" style="background:#ff4444; color:#fff; padding:3px 6px; text-decoration:none; border-radius:3px; font-weight:bold;">DEL</a>
+                                <div class="key-item">
+                                    <div style="color:#00ffcc; font-weight:bold; font-size:13px; margin-bottom:4px;">${k.key}</div>
+                                    <div style="color:#aaa; margin-bottom:6px;">Label: ${k.label} | Type: ${k.type}</div>
+                                    <div style="color:#666; margin-bottom:8px;">Status: <span style="color:${k.status==='ACTIVE'?'#00ffcc':'#ffaa00'}">${k.status}</span></div>
+                                    <div>
+                                        <a href="/api/admin?pass=${ADMIN_PASSWORD}&action=toggle&key=${k.key}&status=${k.status}" style="background:#ffaa00; color:#000; padding:4px 8px; text-decoration:none; border-radius:4px; font-weight:bold; font-size:11px; margin-right:5px;">${k.status === 'OFF' ? 'ENABLE' : 'DISABLE'}</a>
+                                        <a href="/api/admin?pass=${ADMIN_PASSWORD}&action=delete&key=${k.key}" style="background:#ff4444; color:#fff; padding:4px 8px; text-decoration:none; border-radius:4px; font-weight:bold; font-size:11px;">DELETE</a>
                                     </div>
                                 </div>
                             `).join('')}
@@ -154,9 +190,3 @@ module.exports = async (req, res) => {
                 </html>
             `);
         }
-
-        return res.status(404).json({ error: "Not Found" });
-    } catch (err) {
-        return res.status(500).json({ error: err.message });
-    }
-};
