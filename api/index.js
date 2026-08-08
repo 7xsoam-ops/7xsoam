@@ -1,7 +1,7 @@
 const { MongoClient } = require('mongodb');
 
 const uri = process.env.MONGODB_URI;
-const ADMIN_PASSWORD = "Soam@7521"; // Updated password
+const ADMIN_PASSWORD = "Soam@7521";
 
 let cachedDb = null;
 
@@ -18,13 +18,15 @@ module.exports = async (req, res) => {
         const db = await connectToDatabase();
         const keysCollection = db.collection('keys');
 
-        const urlPath = req.url.split('?')[0];
+        const rawUrl = req.url || '';
+        const pathOnly = rawUrl.split('?')[0];
 
-        if (urlPath === '/api' || urlPath === '/api/') {
-            const query = new URL(req.url, 'http://localhost').searchParams;
-            if (query.has('key')) {
-                const userKey = query.get('key');
-                const deviceId = query.get('device') || 'UNKNOWN';
+        // 1. API Endpoint for Key Validation
+        if (pathOnly === '/api' || pathOnly === '/api/') {
+            const queryParams = new URL(rawUrl, 'http://localhost').searchParams;
+            if (queryParams.has('key')) {
+                const userKey = queryParams.get('key');
+                const deviceId = queryParams.get('device') || 'UNKNOWN';
                 const keyDoc = await keysCollection.findOne({ key: userKey });
                 
                 if (!keyDoc) return res.json({ status: false, message: "Invalid Key!" });
@@ -40,9 +42,10 @@ module.exports = async (req, res) => {
             }
         }
 
-        if (urlPath === '/api/admin' || urlPath === '/api/admin/') {
-            const query = new URL(req.url, 'http://localhost').searchParams;
-            const pass = query.get('pass');
+        // 2. Admin Panel Endpoint
+        if (pathOnly === '/api/admin' || pathOnly === '/api/admin/') {
+            const queryParams = new URL(rawUrl, 'http://localhost').searchParams;
+            const pass = queryParams.get('pass');
 
             if (pass !== ADMIN_PASSWORD) {
                 res.setHeader('Content-Type', 'text/html');
@@ -51,11 +54,11 @@ module.exports = async (req, res) => {
                     <html>
                     <head><title>Login</title><meta name="viewport" content="width=device-width, initial-scale=1"></head>
                     <body style="background:#07090e; color:#00ffcc; font-family:monospace; display:flex; justify-content:center; align-items:center; height:100vh; margin:0;">
-                        <div style="background:#121826; padding:30px; border:1px solid #222f49; border-radius:10px; text-align:center;">
+                        <div style="background:#121826; padding:30px; border:1px solid #222f49; border-radius:10px; text-align:center; width:280px;">
                             <h2>🔐 SECURE LOGIN</h2>
                             <form method="GET" action="/api/admin">
-                                <input type="password" name="pass" placeholder="Enter Password" required style="padding:10px; width:200px; background:#07090e; color:#fff; border:1px solid #222f49; border-radius:5px; text-align:center;"><br><br>
-                                <button type="submit" style="padding:10px 20px; background:#00ffcc; color:#07090e; border:none; font-weight:bold; border-radius:5px; cursor:pointer;">ENTER</button>
+                                <input type="password" name="pass" placeholder="Password" required autofocus style="padding:12px; width:90%; background:#07090e; color:#fff; border:1px solid #222f49; border-radius:5px; text-align:center; font-size:16px;"><br><br>
+                                <button type="submit" style="padding:12px; width:100%; background:#00ffcc; color:#07090e; border:none; font-weight:bold; border-radius:5px; cursor:pointer; font-size:16px;">ENTER</button>
                             </form>
                         </div>
                     </body>
@@ -63,11 +66,11 @@ module.exports = async (req, res) => {
                 `);
             }
 
-            const action = query.get('action');
+            const action = queryParams.get('action');
             if (action === 'generate') {
-                const type = query.get('type') || 'Normal';
-                const days = parseInt(query.get('days')) || 1;
-                const label = query.get('label') || 'User';
+                const type = queryParams.get('type') || 'Normal';
+                const days = parseInt(queryParams.get('days')) || 1;
+                const label = queryParams.get('label') || 'User';
                 
                 const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
                 let newKey = type === 'Advance' ? 'ADV-' : 'VIP-';
@@ -88,15 +91,15 @@ module.exports = async (req, res) => {
             }
 
             if (action === 'toggle') {
-                const k = query.get('key');
-                const st = query.get('status');
+                const k = queryParams.get('key');
+                const st = queryParams.get('status');
                 await keysCollection.updateOne({ key: k }, { $set: { status: st === 'OFF' ? 'UNUSED' : 'OFF' } });
                 res.writeHead(302, { Location: `/api/admin?pass=${ADMIN_PASSWORD}` });
                 return res.end();
             }
 
             if (action === 'delete') {
-                await keysCollection.deleteOne({ key: query.get('key') });
+                await keysCollection.deleteOne({ key: queryParams.get('key') });
                 res.writeHead(302, { Location: `/api/admin?pass=${ADMIN_PASSWORD}` });
                 return res.end();
             }
