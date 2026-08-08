@@ -1,15 +1,14 @@
-
 module.exports = (req, res) => {
   const { key, hwid } = req.query;
 
   // Yahan aap apni keys add kar sakte ho
   const validKeys = {
-    "RAVI-VIP-101": { status: "active" },
+    "VIP-777": { status: "active" },
     "TEST-KEY-007": { status: "active" }
   };
 
   if (!key) {
-    return res.status(400).json({ status: "failed", message: "Please enter a key" });
+    return res.status(400).json({ status: "failed", message: "Key required!" });
   }
 
   if (validKeys[key]) {
