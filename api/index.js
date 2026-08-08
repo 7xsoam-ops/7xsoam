@@ -1,15 +1,15 @@
-!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Omega Star - Official Download</title>
+    <title>Omega Star Panel</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             background-color: #0b0f19;
             color: #ffffff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: Arial, sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -37,7 +37,6 @@
             text-decoration: none;
             font-weight: bold;
             border-radius: 8px;
-            transition: 0.2s;
             font-size: 15px;
         }
         .btn:hover { background: #0ea5e9; color: #fff; }
@@ -48,18 +47,4 @@
         .btn-tg:hover { background: #1d4ed8; }
     </style>
 </head>
-<body>
-
-    <div class="card">
-        <h1>Omega Star Panel</h1>
-        <p>Official & Secure Game Integration Tool</p>
-        
-        <!-- Yaha apne APK ka direct link dalna -->
-        <a href="YAH_APNE_APK_KA_LINK_DAALEIN" class="btn">Download APK (v1.0)</a>
-        
-        <!-- Yaha apna Telegram ya WhatsApp link dalna -->
-        <a href="https://t.me/AapkaTelegramUsername" class="btn btn-tg">Buy License Key</a>
-    </div>
-
-</body>
-</html>
+<body
