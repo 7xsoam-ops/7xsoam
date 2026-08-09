@@ -33,5 +33,4 @@ app.post('/api/verify-key', async (req, res) => {
         return res.json({ success: false, message: "Key has expired!" });
     }
 
-    res.json({ success: true, message: "Key verified successfully!" });
-});
+    res.json({ success: true, message: "
