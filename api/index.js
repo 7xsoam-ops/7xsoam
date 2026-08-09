@@ -1,4 +1,4 @@
-// POST /api/verify-key
+POST /api/verify-key
 app.post('/api/verify-key', async (req, res) => {
     const { key_code, device_id } = req.body;
     
